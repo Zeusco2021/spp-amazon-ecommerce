@@ -1,0 +1,11 @@
+server:
+  port: 8089
+
+spring:
+  application:
+    name: inventory-service
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/inventory_db
+  jpa:
+    hibernate:
+      ddl-auto: update

@@ -1,0 +1,14 @@
+server:
+  port: 8088
+
+spring:
+  application:
+    name: notification-service
+
+sendgrid:
+  api-key: ${SENDGRID_API_KEY:placeholder}
+
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID:placeholder}
+  auth-token: ${TWILIO_AUTH_TOKEN:placeholder}
+  from-number: ${TWILIO_FROM_NUMBER:+1234567890}

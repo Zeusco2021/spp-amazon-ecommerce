@@ -1,0 +1,298 @@
+spring:
+  application:
+    name: api-gateway
+  config:
+    import: optional:configserver:${CONFIG_SERVER_URI:http://localhost:8888}
+
+  # Redis for rate limiting
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 5
+          min-idle: 2
+
+  cloud:
+    gateway:
+      # Global CORS configuration
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns:
+              - "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+              - PATCH
+            allowedHeaders:
+              - "*"
+            allowCredentials: true
+            maxAge: 3600
+
+      # Default filters applied to all routes
+      default-filters:
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 100
+            redis-rate-limiter.burstCapacity: 200
+            redis-rate-limiter.requestedTokens: 1
+            key-resolver: "#{@userKeyResolver}"
+        - name: CircuitBreaker
+          args:
+            name: defaultCircuitBreaker
+            fallbackUri: forward:/fallback
+
+      routes:
+        # User Service - public routes (no auth)
+        - id: user-service-public
+          uri: http://${USER_SERVICE_HOST:localhost}:${USER_SERVICE_PORT:8081}
+          predicates:
+            - Path=/api/users/register, /api/users/login
+            - Method=POST
+          filters:
+            - name: RequestLogging
+            - name: CircuitBreaker
+              args:
+                name: userServiceCircuitBreaker
+                fallbackUri: forward:/fallback
+
+        # User Service - protected routes
+        - id: user-service
+          uri: http://${USER_SERVICE_HOST:localhost}:${USER_SERVICE_PORT:8081}
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - name: JwtAuthentication
+            - name: RequestLogging
+            - name: CircuitBreaker
+              args:
+                name: userServiceCircuitBreaker
+                fallbackUri: forward:/fallback
+
+        # Product Service - public GET routes
+        - id: product-service-public
+          uri: http://${PRODUCT_SERVICE_HOST:localhost}:${PRODUCT_SERVICE_PORT:8082}
+          predicates:
+            - Path=/api/products/**
+            - Method=GET
+          filters:
+            - name: RequestLogging
+            - name: CircuitBreaker
+              args:
+                name: productServiceCircuitBreaker
+                fallbackUri: forward:/fallback
+
+        # Product Service - protected write routes
+        - id: product-service-protected
+          uri: http://${PRODUCT_SERVICE_HOST:localhost}:${PRODUCT_SERVICE_PORT:8082}
+          predicates:
+            - Path=/api/products/**
+            - Method=POST, PUT, DELETE, PATCH
+          filters:
+            - name: JwtAuthentication
+            - name: RequestLogging
+            - name: CircuitBreaker
+              args:
+                name: productServiceCircuitBreaker
+                fallbackUri: forward:/fallback
+
+        # Cart Service - protected
+        - id: cart-service
+          uri: http://${CART_SERVICE_HOST:localhost}:${CART_SERVICE_PORT:8083}
+          predicates:
+            - Path=/api/cart/**
+          filters:
+            - name: JwtAuthentication
+            - name: RequestLogging
+            - name: CircuitBreaker
+              args:
+                name: cartServiceCircuitBreaker
+                fallbackUri: forward:/fallback
+
+        # Order Service - protected
+        - id: order-service
+          uri: http://${ORDER_SERVICE_HOST:localhost}:${ORDER_SERVICE_PORT:8084}
+          predicates:
+            - Path=/api/orders/**
+          filters:
+            - name: JwtAuthentication
+            - name: RequestLogging
+            - name: CircuitBreaker
+              args:
+                name: orderServiceCircuitBreaker
+                fallbackUri: forward:/fallback
+
+        # Payment Service - protected
+        - id: payment-service
+          uri: http://${PAYMENT_SERVICE_HOST:localhost}:${PAYMENT_SERVICE_PORT:8085}
+          predicates:
+            - Path=/api/payments/**
+          filters:
+            - name: JwtAuthentication
+            - name: RequestLogging
+            - name: CircuitBreaker
+              args:
+                name: paymentServiceCircuitBreaker
+                fallbackUri: forward:/fallback
+
+        # Search Service - public
+        - id: search-service
+          uri: http://${SEARCH_SERVICE_HOST:localhost}:${SEARCH_SERVICE_PORT:8086}
+          predicates:
+            - Path=/api/search/**
+          filters:
+            - name: RequestLogging
+            - name: CircuitBreaker
+              args:
+                name: searchServiceCircuitBreaker
+                fallbackUri: forward:/fallback
+
+        # Recommendation Service - protected
+        - id: recommendation-service
+          uri: http://${RECOMMENDATION_SERVICE_HOST:localhost}:${RECOMMENDATION_SERVICE_PORT:8087}
+          predicates:
+            - Path=/api/recommendations/**
+          filters:
+            - name: JwtAuthentication
+            - name: RequestLogging
+            - name: CircuitBreaker
+              args:
+                name: recommendationServiceCircuitBreaker
+                fallbackUri: forward:/fallback
+
+        # Notification Service - protected
+        - id: notification-service
+          uri: http://${NOTIFICATION_SERVICE_HOST:localhost}:${NOTIFICATION_SERVICE_PORT:8088}
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - name: JwtAuthentication
+            - name: RequestLogging
+            - name: CircuitBreaker
+              args:
+                name: notificationServiceCircuitBreaker
+                fallbackUri: forward:/fallback
+
+        # Inventory Service - protected
+        - id: inventory-service
+          uri: http://${INVENTORY_SERVICE_HOST:localhost}:${INVENTORY_SERVICE_PORT:8089}
+          predicates:
+            - Path=/api/inventory/**
+          filters:
+            - name: JwtAuthentication
+            - name: RequestLogging
+            - name: CircuitBreaker
+              args:
+                name: inventoryServiceCircuitBreaker
+                fallbackUri: forward:/fallback
+
+# JWT configuration
+jwt:
+  secret: ${JWT_SECRET:myDefaultSecretKeyForDevelopmentOnlyChangeInProduction123456}
+  expiration: 86400000  # 24 hours in ms
+
+# Resilience4j circuit breaker configuration
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 30s
+        failureRateThreshold: 50
+        slowCallRateThreshold: 100
+        slowCallDurationThreshold: 5s
+        recordExceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.reactive.function.client.WebClientResponseException
+    instances:
+      defaultCircuitBreaker:
+        baseConfig: default
+      userServiceCircuitBreaker:
+        baseConfig: default
+      productServiceCircuitBreaker:
+        baseConfig: default
+      cartServiceCircuitBreaker:
+        baseConfig: default
+      orderServiceCircuitBreaker:
+        baseConfig: default
+      paymentServiceCircuitBreaker:
+        baseConfig: default
+      searchServiceCircuitBreaker:
+        baseConfig: default
+      recommendationServiceCircuitBreaker:
+        baseConfig: default
+      notificationServiceCircuitBreaker:
+        baseConfig: default
+      inventoryServiceCircuitBreaker:
+        baseConfig: default
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 5s
+        cancelRunningFuture: true
+    instances:
+      defaultCircuitBreaker:
+        baseConfig: default
+      userServiceCircuitBreaker:
+        baseConfig: default
+      productServiceCircuitBreaker:
+        baseConfig: default
+      cartServiceCircuitBreaker:
+        baseConfig: default
+      orderServiceCircuitBreaker:
+        baseConfig: default
+      paymentServiceCircuitBreaker:
+        baseConfig: default
+      searchServiceCircuitBreaker:
+        baseConfig: default
+      recommendationServiceCircuitBreaker:
+        baseConfig: default
+      notificationServiceCircuitBreaker:
+        baseConfig: default
+      inventoryServiceCircuitBreaker:
+        baseConfig: default
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics, gateway
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: NATIVE
+  ssl:
+    enabled: ${SSL_ENABLED:false}
+    key-store: ${SSL_KEY_STORE:classpath:keystore.p12}
+    key-store-password: ${SSL_KEY_STORE_PASSWORD:changeit}
+    key-store-type: PKCS12
+    key-alias: ${SSL_KEY_ALIAS:tomcat}
+    protocol: TLS
+    enabled-protocols: TLSv1.2,TLSv1.3
+  http2:
+    enabled: true
+
+logging:
+  level:
+    com.ecommerce.gateway: DEBUG
+    org.springframework.cloud.gateway: INFO

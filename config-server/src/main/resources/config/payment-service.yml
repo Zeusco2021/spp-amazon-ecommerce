@@ -1,0 +1,14 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/payment_db
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+stripe:
+  api-key: ${STRIPE_API_KEY:sk_test_placeholder}
